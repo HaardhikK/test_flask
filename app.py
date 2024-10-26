@@ -16,6 +16,8 @@ import requests
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
 
 # Load environment variables
 load_dotenv()
@@ -23,39 +25,34 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configuration from environment variables
-CHROME_BINARY_PATH = os.getenv('CHROME_BINARY_PATH')
-CHROMEDRIVER_PATH = os.getenv('CHROMEDRIVER_PATH')
 GPT4_API_KEY = os.getenv('GPT4_API_KEY')
 
 # Validate required environment variables
-required_env_vars = {
-    'CHROME_BINARY_PATH': CHROME_BINARY_PATH,
-    'CHROMEDRIVER_PATH': CHROMEDRIVER_PATH,
-    'GPT4_API_KEY': GPT4_API_KEY
-}
-
-for var_name, var_value in required_env_vars.items():
-    if not var_value:
-        raise ValueError(f"Missing required environment variable: {var_name}")
+if not GPT4_API_KEY:
+    raise ValueError("Missing required environment variable: GPT4_API_KEY")
 
 class IECScraperException(Exception):
     """Custom exception for IEC scraping errors"""
     pass
 
 def create_driver():
+    """Create a Chrome WebDriver instance configured for Render deployment"""
     options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--disable-software-rasterizer')
+    options.add_argument('--disable-extensions')
+    options.add_argument('--single-process')
+    options.add_argument('--remote-debugging-port=9222')
+    options.add_argument('--disable-setuid-sandbox')
+    options.add_argument('--window-size=1920,1080')
     options.page_load_strategy = 'eager'
     
-    if CHROME_BINARY_PATH:
-        options.binary_location = CHROME_BINARY_PATH
-    
     try:
-        service = Service(executable_path=CHROMEDRIVER_PATH)
+        # Use ChromeDriverManager to automatically handle driver installation
+        service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
@@ -228,8 +225,8 @@ def extract_iec_details(driver):
     except Exception as e:
         raise IECScraperException(f"Error extracting IEC details: {str(e)}")
     
-    # Join details with newline character
     return "\n".join(details)
+
 def handle_captcha_submission(driver):
     max_attempts = 5
     attempt = 0
@@ -302,7 +299,6 @@ def get_iec_details():
                     'error': 'Failed to solve captcha'
                 }), 400
             
-            # Extract details (now returning newline-separated strings)
             iec_details = extract_iec_details(driver)
             branch_details = extract_table_data_with_pagination(driver, "branchTable", "branchTable_next")
             
@@ -328,5 +324,6 @@ def get_iec_details():
             'success': False,
             'error': f'Server error: {str(e)}'
         }), 500
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
