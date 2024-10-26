@@ -50,13 +50,42 @@ def create_driver():
     options.add_argument('--window-size=1920,1080')
     options.page_load_strategy = 'eager'
     
+    # Set binary location for Render environment
+    CHROME_BINARY_LOCATIONS = [
+        "/usr/bin/google-chrome",  # Render's default location
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium"
+    ]
+    
+    chrome_binary = None
+    for location in CHROME_BINARY_LOCATIONS:
+        if os.path.exists(location):
+            chrome_binary = location
+            break
+    
+    if chrome_binary:
+        options.binary_location = chrome_binary
+    
     try:
-        # Use ChromeDriverManager to automatically handle driver installation
-        service = ChromeService(ChromeDriverManager().install())
+        # Install ChromeDriver using webdriver_manager
+        driver_path = ChromeDriverManager().install()
+        service = ChromeService(executable_path=driver_path)
+        
+        # Create and return the WebDriver instance
         driver = webdriver.Chrome(service=service, options=options)
         return driver
     except Exception as e:
-        raise IECScraperException(f"Failed to create Chrome driver: {str(e)}")
+        # Log more detailed error information
+        import sys
+        import traceback
+        error_details = {
+            'error_type': str(type(e).__name__),
+            'error_message': str(e),
+            'traceback': traceback.format_exc()
+        }
+        print("Chrome driver creation error details:", error_details)
+        raise IECScraperException(f"Failed to create Chrome driver: {str(e)}\nDetails: {error_details}")
 
 def capture_captcha_section(driver):
     try:
